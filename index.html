@@ -42,7 +42,6 @@
         }
         .upload-area span { font-size: 40px; margin-bottom: 10px; }
         
-        /* Контейнер сравнения До/После */
         .compare-wrapper {
             position: relative;
             width: 100%;
@@ -92,7 +91,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.5);
         }
 
-        /* Панель инструментов */
         .controls {
             width: 100%;
             max-width: 450px;
@@ -156,6 +154,26 @@
             font-size: 13px;
             cursor: pointer;
         }
+        #result-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+        #result-img {
+            max-width: 100%;
+            max-height: 75vh;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            user-select: auto;
+            -webkit-user-select: auto;
+        }
     </style>
 </head>
 <body>
@@ -199,6 +217,12 @@
         </div>
     </div>
 
+    <div id="result-modal">
+        <p style="font-size: 14px; margin-bottom: 12px;">Зажмите палец на фото и выберите <b>«Сохранить в галерею»</b></p>
+        <img id="result-img" alt="Результат">
+        <button class="small-btn" style="padding: 10px 24px; font-size: 15px;" onclick="document.getElementById('result-modal').style.display='none'">Вернуться к редактированию</button>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -220,7 +244,6 @@
         let originalImg = null;
         let currentPreset = 'heal';
 
-        // Исправленная загрузка файла
         function handleFile(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -248,7 +271,7 @@
 
                     processImage();
 
-                    tg.MainButton.setText("Сохранить результат");
+                    tg.MainButton.setText("Готово / Сохранить фото");
                     tg.MainButton.show();
                 };
                 img.src = ev.target.result;
@@ -261,82 +284,3 @@
 
         function selectPreset(preset, btn) {
             currentPreset = preset;
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            processImage();
-        }
-
-        intensityInput.addEventListener('input', () => {
-            valText.innerText = intensityInput.value + '%';
-            processImage();
-        });
-
-        // Алгоритм автоматической ретуши
-        function processImage() {
-            if (!originalImg) return;
-            const w = canvasAfter.width;
-            const h = canvasAfter.height;
-            const strength = intensityInput.value / 100;
-
-            ctxAfter.clearRect(0, 0, w, h);
-            ctxAfter.filter = 'none';
-            ctxAfter.globalAlpha = 1;
-            ctxAfter.globalCompositeOperation = 'source-over';
-            ctxAfter.drawImage(originalImg, 0, 0, w, h);
-            if (strength === 0) return;
-// Частотное разложение (Auto Heal)
-if (currentPreset === 'heal' || currentPreset === 'pro') {
-const tempCanvas = document.createElement('canvas');
-tempCanvas.width = w;
-tempCanvas.height = h;
-const tCtx = tempCanvas.getContext('2d');
-const blurRadius = Math.max(4, Math.round(w * 0.012));
-tCtx.filter = blur(${blurRadius}px);
-tCtx.drawImage(originalImg, 0, 0, w, h);
-const origData = ctxAfter.getImageData(0, 0, w, h);
-const blurData = tCtx.getImageData(0, 0, w, h);
-const d = origData.data;
-const b = blurData.data;
-for (let i = 0; i < d.length; i += 4) {
-const r = d[i], g = d[i+1], bl = d[i+2];
-const isSkin = (r > 95 && g > 40 && bl > 20 && r > g && r > bl && Math.abs(r - g) > 15);
-if (isSkin) {
-const alpha = strength * 0.65;
-d[i]   = r * (1 - alpha) + b[i] * alpha;
-d[i+1] = g * (1 - alpha) + b[i+1] * alpha;
-d[i+2] = bl * (1 - alpha) + b[i+2] * alpha;
-}
-}
-ctxAfter.putImageData(origData, 0, 0);
-}
-// Автоматический Dodge & Burn
-if (currentPreset === 'db' || currentPreset === 'pro') {
-ctxAfter.save();
-ctxAfter.globalCompositeOperation = 'soft-light';
-ctxAfter.globalAlpha = strength * 0.55;
-ctxAfter.filter = 'contrast(135%) brightness(105%)';
-ctxAfter.drawImage(canvasAfter, 0, 0);
-ctxAfter.restore();
-}
-}
-// Логика шторки До/После
-function moveSlider(e) {
-const rect = compareWrapper.getBoundingClientRect();
-const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-let pos = ((clientX - rect.left) / rect.width) * 100;
-pos = Math.max(0, Math.min(100, pos));
-canvasBefore.style.clipPath = inset(0 ${100 - pos}% 0 0);
-sliderLine.style.left = pos + '%';
-}
-compareWrapper.addEventListener('mousemove', (e) => { if (e.buttons === 1) moveSlider(e); });
-compareWrapper.addEventListener('touchmove', moveSlider);
-compareWrapper.addEventListener('click', moveSlider);
-// Сохранение файла
-tg.MainButton.onClick(() => {
-const dataUrl = canvasAfter.toDataURL('image/jpeg', 0.95);
-const link = document.createElement('a');
-link.download = 'retouched-portrait.jpg';
-link.href = dataUrl;
-link.click();
-tg.showAlert("Фото сохранено! Если загрузка не началась автоматически, зажмите палец на фото и выберите «Сохранить».");
-});
